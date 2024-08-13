@@ -1,21 +1,16 @@
-# Hamiltonian Extension of the [Double Pendulum App](https://github.com/pineapple-bois/Double_Pendulum_App/tree/main)
+# Extension of the [Double Pendulum App](https://github.com/pineapple-bois/Double_Pendulum_App/tree/main). Development of the `Chaos` page
 
-This development section aims to extend the DoublePendulum App by deriving the Hamiltonian. There are a few disparate threads I'm trying to weave together. These have been started in a non-sequential fashion
 
-----
-
-1. #### Derive the Hamiltonian of the system and prepare equations of motion for numerical integration 🥳🍍
-2. #### Abstract the derivation as a series of dependent functions to lambdify and substitute parameters 🥳🍍
-3. #### Extend the `DoublePendulum` class to `DoublePendulumExplorer` capable of integrating a range of initial conditions. 
-- Specifically; $\theta_2 \in [-\pi, \pi], \text{step}=0.5^{\circ}$ and $t \in [0, 120]\text{s}$
-4. #### Write a data dictionary in JSON format of all angles, velocities and positions 
-- Currently these use the Lagrangian and are 2 x 9Gb!
-5. #### Host this data as a PostgreSQL DB on a cloud server (aiming for v.cheap/free)
-6. #### Iterate over and slice the DB to plot Poincaré sections and Lyapunov exponents
+1. #### Extend the `DoublePendulum` class to `DoublePendulumExplorer` capable of integrating a range of initial conditions. 
+   - Specifically; $\theta_2 \in [-\pi, \pi], \text{step}=0.5^{\circ}$ and $t \in [0, 120]\text{s}$
+2. #### Write a data dictionary in JSON format of all angles, velocities and positions 
+   - Currently these use the Lagrangian and are 2 x 9Gb!
+3. #### Host this data as a PostgreSQL DB on a cloud server (aiming for v.cheap/free)
+4. #### Iterate over and slice the DB to plot Poincaré sections and Lyapunov exponents
 
 ----
 
-### All of the above will form the basis of a new page for the web app; 'chaotic dynamics'. Instead of deriving a double pendulum system 'on-the-fly', we will pull data from the database with simple slicing queries.
+### All of the above will form the basis of a new page for the web app. Instead of deriving a double pendulum system 'on-the-fly', we will pull data from the database with simple slicing queries.
 
 ### Development Directory Structure
 
@@ -32,24 +27,7 @@ development/
 └── README.md
 ```
 
-----
-
-1. ### [`DevelopmentHamiltonian.ipynb`](https://github.com/pineapple-bois/Double_Pendulum/blob/master/DevelopmentHamiltonian.ipynb)
-
-The notebook (moved to [Double_Pendulum Repo](https://github.com/pineapple-bois/Double_Pendulum/tree/master)) derives the Hamiltonian symbolically from first principles using similar methods to:
-- [Diego Assencio](https://dassencio.org/46)
-- [lehman.edu](https://www.lehman.edu/faculty/dgaranin/Mechanics/ProblemSet-Fall-2006-4-Solution.pdf)
-
-----
-
-2.
-   ### [`DoublePendulumHamiltonian.py`](../DoublePendulumHamiltonian.py)
-     - Math functions related to the Hamiltonian have been added to [`MathFunctions.py`](../MathFunctions.py)
-     - The Hamiltonian system has been incorporated into the app
-
-----
-
-3. ### [`DoublePendulumSubclass.py`](pyscripts/DoublePendulumSubclass.py)
+1. ### [`DoublePendulumSubclass.py`](pyscripts/DoublePendulumSubclass.py)
 
    The `DoublePendulumExplorer` subclass extends the functionality of the `DoublePendulum` class to explore a range of initial conditions for a double pendulum system. It focuses on how varying the initial angle $\theta_2$ affects the system's dynamics, and it provides tools for visualising Poincaré sections and other dynamic behaviors.
 
@@ -90,31 +68,19 @@ The notebook (moved to [Double_Pendulum Repo](https://github.com/pineapple-bois/
 
 ---
 
-4. ### [`DevelopmentSubClass.ipynb`](Notebooks/DevelopmentSubClass.ipynb)
+2. ### [`DevelopmentSubClass.ipynb`](Notebooks/DevelopmentSubClass.ipynb)
    - Have started writing the base methods for the subclass.
    - The data dictionaries appear to be quite good!
    - The Poincaré sections are really not what we are looking for...
 
 ----
 
-5. ### [`JSONTest.ipynb`](Notebooks/JSONTest.ipynb)
+3. ### [`JSONTest.ipynb`](Notebooks/JSONTest.ipynb)
    - Reading in the JSON data using Pandas (Will maybe swap for Polars once DB launched)
 
 ----
 
-### Overview of Lagrangian and Hamiltonian Mechanics
-
-**Lagrangian Mechanics:**
-- The Lagrangian $\mathcal{L}$ is defined as $\mathcal{L} = T - V$, where $T$ is the kinetic energy and $V$ is the potential energy.
-- The equations of motion are derived using the Euler-Lagrange equations.
-- The Lagrangian formalism is particularly useful when dealing with generalised coordinates and constraints.
-
-**Hamiltonian Mechanics:**
-- The Hamiltonian $\mathcal{H}$ is defined as the total energy of the system $\mathcal{H} = T + V$ (for conservative systems {which this is!}).
-- The equations of motion are derived using Hamilton's equations, which describe the time evolution of the generalised coordinates and momenta.
-- The Hamiltonian formalism is advantageous in systems with conserved quantities and is deeply connected to the principles of modern physics, such as quantum mechanics.
-
-### Using the Hamiltonian for Analysing Chaos and Periodic Orbits
+4. ### Using the Hamiltonian for Analysing Chaos and Periodic Orbits
 
 **Advantages of Hamiltonian Mechanics in Chaos and Periodic Orbits:**
 1. **Phase Space Analysis:**
@@ -127,7 +93,7 @@ The notebook (moved to [Double_Pendulum Repo](https://github.com/pineapple-bois/
 3. **Symplectic Structure:**
    - The Hamiltonian framework preserves the symplectic structure, which is important in the study of dynamical systems and chaos theory.
 
-### Steps to Map Trajectories and Analyse Chaos
+#### Steps to Map Trajectories and Analyse Chaos
 
 1. **Derive the Hamiltonian:**
    - Ensure that the Hamiltonian is correctly derived from the Lagrangian. In your case, you’ve already done this for the double pendulum.
