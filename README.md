@@ -37,34 +37,19 @@ development/
      - **Simulations and Data Structures**: Run multiple simulations and organise the results in a structured format for easy analysis and visualisation.
 
    
-   #### Class Methods
+### 20/08/24: The Class was refactored to [`DoublePendulumSubclassMomenta.py`](DoublePendulumSubclassMomenta.py) focusing on energy conservation as well as utilising $\operatorname{p}_{\theta_1}$ and $\operatorname{p}_{\theta_2}$
 
-   `_generate_initial_conditions(step_size=0.5)`
-   - Generate a list of initial conditions for the pendulum by varying $\theta_2$ within the specified range.
+#### Refactoring Steps
 
-   
-   `_run_simulations(integrator)`
-   - Run multiple simulations of the double pendulum, each with a different initial $\theta_2$ value.
+1. **Introduction of Potential Energy Calculations:**
+   - We added the ability to calculate the potential energy of the double pendulum system. This was crucial for performing energy-based analysis, such as finding Poincaré sections based on energy levels.
+   - The `_calculate_potential_energy` method was introduced, which accounts for both the 'simple' and 'compound' models, allowing the class to compute potential energy relative to a defined zero-potential reference point.
 
-
-   `_calculate_and_store_positions()`
-   - Calculate the (x, y) positions of both pendulum bobs for each simulation and store them in separate arrays.
+2. **Energy-Based Poincaré Sections:**
+   - The `find_poincare_section` method was updated to focus on energy-based crossings, where the potential energy at a given crossing is compared to a specified maximum potential energy level. This method was refactored to interpolate values at the crossing points and only record them if the energy condition is met.
 
 
-   `_create_data_structure()`
-   - Create a dictionary to store simulation data, including angular displacements, velocities, and positions.
-
-
-   `get_simulation_data(integrator)`
-   - Public method to access the simulation data dictionary. Runs the full simulation and analysis if not already done.
-
-
-   `find_poincare_section(y_fixed, time_interval, angle_interval)`
-   - Find the Poincaré section by identifying points where the second pendulum bob crosses a fixed vertical position within a specified time and angle interval.
-
-
-   `plot_poincare_map()`
-   - Plot the Poincaré map, showing the points where the pendulum crosses the specified vertical position. Each trajectory is plotted with a different color.
+### The new class has been tested in [`NewIdeas.ipynb`](Notebooks/NewIdeas.ipynb) and the initial Poincaré plots look promising
 
 ---
 
