@@ -102,7 +102,7 @@ def form_lagrangian(model='simple'):
         T = sp.trigsimp(T1_trans + T1_rot + T2_trans + T2_rot)
         V = sp.simplify(V1 + V2)
         L = T - V
-    return L
+    return L, T, V
 
 
 def euler_lagrange_system(L, q1, q2, model='simple'):
