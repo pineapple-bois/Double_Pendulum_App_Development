@@ -323,15 +323,11 @@ class DoublePendulum:
 
 class DoublePendulumExplorer(DoublePendulum):
     def __init__(self, parameters, time_vector, model, mechanical_energy,
-                 theta1_cross_section=0, theta2_range=(-np.pi, np.pi), **integrator_args):
+                 theta2_range=(-np.pi, np.pi), **integrator_args):
         super().__init__(parameters, [0, 0, 0, 0], time_vector, model, **integrator_args)
         print("DoublePendulumExplorer initialized with base class.")
-        _, _, V = form_lagrangian(model)     # Returns Lagrangian, Kinetic Energy, Potential Energy
-        self.V = V.subs(parameters)
         self.mechanical_energy = mechanical_energy
-        self.theta1_cross_section = theta1_cross_section
         self.theta2_range = theta2_range
-        self._data_ready = False # Flag to track if simulation data is ready for structure computation
 
     def time_graph(self):
         raise NotImplementedError("This method is not applicable for DoublePendulumExplorer.")
@@ -341,25 +337,6 @@ class DoublePendulumExplorer(DoublePendulum):
 
     def animate_pendulum(self, fig_width=700, fig_height=700, trace=False, static=False, appearance='light'):
         raise NotImplementedError("This method is not applicable for DoublePendulumExplorer.")
-
-    def _calculate_potential_energy(self, theta1_val, theta2_val, model='simple'):
-        # Perform substitutions for the potential energy (V)
-        if model == 'simple':
-            V_zero = -(m1 + m2) * g * l1 - m2 * g * l2
-        elif model == 'compound':
-            V_zero = -M1 * g * (l1 / 2) - M2 * g * ((l1 + l2) / 2)
-        else:
-            raise ValueError("Model must be 'simple' or 'compound'")
-        V_zero_numeric = V_zero.subs(self.parameters)
-
-        V_numeric = self.V.subs({
-            theta1: theta1_val,
-            theta2: theta2_val
-        })
-
-        V_relative = V_numeric - V_zero_numeric
-        # Evaluate the expression numerically
-        return float(V_relative)
 
     def _generate_initial_conditions(self, step_size_degrees=0.5):
         """
@@ -434,7 +411,7 @@ class DoublePendulumExplorer(DoublePendulum):
 
         print(f"Simulations Complete. Time taken: {elapsed_time:.2f} seconds.")
 
-    def find_poincare_section(self, energy_tolerance=1e-2, integrator=solve_ivp):
+    def find_poincare_section(self, integrator=solve_ivp):
         """
         Find the Poincaré section for the system based on the specified mechanical energy.
 
@@ -448,37 +425,48 @@ class DoublePendulumExplorer(DoublePendulum):
 
         self.poincare_section_data = []
 
-        # Pre-calculate the mechanical energy tolerance for quick comparisons
-        max_mechanical_energy = self.mechanical_energy + energy_tolerance
-
-        for simulation in self.initial_condition_data:
+        for sim_idx, simulation in enumerate(self.initial_condition_data):
             theta1_values = simulation[:, 0]
             theta2_values = simulation[:, 1]
             p_theta_2_values = simulation[:, 3]
 
             poincare_points = []
 
+            # Reset debug counter for each simulation
+            debug_count = 0
+            max_debug = 5
+
+            tolerance = 1e-9  # Define a small tolerance value
+
             for i in range(1, len(theta1_values)):
                 theta1_prev = theta1_values[i - 1]
                 theta1_curr = theta1_values[i]
 
-                # Check for crossing through the theta1 cross-section (theta1 = 0)
-                if (theta1_prev - self.theta1_cross_section) * (theta1_curr - self.theta1_cross_section) < 0:
+                # # Check for traditional crossing or near-crossing using tolerance
+                # if (theta1_prev * theta1_curr < 0) or \
+                #         (abs(theta1_curr) < tolerance and theta1_prev * theta1_curr < 0) or \
+                #         (abs(theta1_prev) < tolerance and theta1_prev * theta1_curr < 0):
+
+                # Check for crossing or near-crossing with tolerance
+                if theta1_prev * theta1_curr < tolerance:
+
                     # Interpolation for the crossing point
                     ratio = -theta1_prev / (theta1_curr - theta1_prev)
                     theta2_interp = theta2_values[i - 1] + ratio * (theta2_values[i] - theta2_values[i - 1])
                     p_theta_2_interp = p_theta_2_values[i - 1] + ratio * (p_theta_2_values[i] - p_theta_2_values[i - 1])
 
-                    # Calculate potential energy at the crossing point
-                    potential_energy = self._calculate_potential_energy(self.theta1_cross_section, theta2_interp,
-                                                                        self.model)
+                    # Optional debug statement to track detected crossings
+                    # if debug_count < max_debug:
+                    #     print(f"[DEBUG] Simulation {sim_idx}, Crossing Detected: theta2_interp = {theta2_interp}, p_theta_2_interp = {p_theta_2_interp}")
+                    #     debug_count += 1
 
-                    # Record if the potential energy is within the allowed range
-                    if potential_energy <= max_mechanical_energy:
-                        poincare_points.append((theta2_interp, p_theta_2_interp))
+                    poincare_points.append((theta2_interp, p_theta_2_interp))
 
             if poincare_points:
                 self.poincare_section_data.append(poincare_points)
+                print(f"[DEBUG] Simulation {sim_idx}: {len(poincare_points)} Poincaré points detected.")
+            else:
+                print(f"[DEBUG] Simulation {sim_idx}: No Poincaré points detected.")
 
     def plot_poincare_map(self, special_angles_deg=None, xrange=(-np.pi, np.pi), yrange=None):
         """
