@@ -43,7 +43,7 @@ Double_Pendulum_App_Development/
      - **Simulations and Data Structures**: Run multiple simulations and organise the results in a structured format for easy analysis and visualisation.
 
    
-### 20/08/24: The Class was refactored to [`DoublePendulumSubclassMomenta.py`](DoublePendulumSubclassMomenta.py) focusing on energy conservation as well as utilising $\operatorname{p}_{\theta_1}$ and $\operatorname{p}_{\theta_2}$
+### 20/08/24: The Class was refactored to [`DoublePendulumSubclassMomenta.py`](DoublePendulumSubclassMomenta.py) focusing on energy conservation as well as utilising $\text{p}_{\theta_1}$ and $\text{p}_{\theta_2}$
 
 #### Refactoring Steps
 
