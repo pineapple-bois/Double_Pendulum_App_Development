@@ -480,9 +480,19 @@ class DoublePendulumExplorer(DoublePendulum):
             if poincare_points:
                 self.poincare_section_data.append(poincare_points)
 
-    def plot_poincare_map(self):
+    def plot_poincare_map(self, special_angles_deg=None, xrange=(-np.pi, np.pi), yrange=None):
         """
-        Plot the Poincaré section based on the computed data.
+        Plot the Poincaré section based on the computed data, with options to highlight special angles and restrict axes.
+
+        Parameters:
+        ----------
+        special_angles_deg : list of float or None, optional
+            A list of angles in degrees for which special trajectories should be highlighted in black.
+            If None, no special trajectories are highlighted. Defaults to None.
+        xrange : tuple of float, optional
+            Limits for the x-axis in radians. Defaults to (-np.pi, np.pi).
+        yrange : tuple of float or None, optional
+            Limits for the y-axis. If None, the y-axis limits are set automatically. Defaults to None.
         """
         if not self.poincare_section_data:
             raise RuntimeError("No Poincaré data available. Run 'find_poincare_section' first.")
@@ -498,8 +508,32 @@ class DoublePendulumExplorer(DoublePendulum):
                 theta2, p_theta_2 = zip(*poincare_points)
                 plt.scatter(theta2, p_theta_2, s=0.05, color=colors[i])
 
-        plt.xlim(-np.pi, np.pi)
-        plt.xlabel(r'$\theta_2$')
+        # Overlay special trajectories if special_angles_deg is provided
+        if special_angles_deg is not None:
+            special_indices = [(angle_deg + 180) / 0.5 for angle_deg in special_angles_deg]  # Calculate indices
+
+            for i, index in enumerate(special_indices):
+                index = int(index)
+                if 0 <= index < len(self.poincare_section_data):
+                    poincare_points = self.poincare_section_data[index]
+                    if poincare_points:
+                        theta2, p_theta_2 = zip(*poincare_points)
+                        plt.scatter(theta2, p_theta_2, s=0.1, color='black')
+
+        # Set x-axis limits
+        plt.xlim(xrange)
+
+        # Set y-axis limits if provided
+        if yrange is not None:
+            plt.ylim(yrange)
+
+        # Set x-axis ticks in radians with corresponding labels in degrees
+        radians_ticks = np.linspace(xrange[0], xrange[1], 7)
+        # Adjust any potential off-by-one errors
+        degrees_labels = [str(int(np.floor(np.rad2deg(tick)))) for tick in radians_ticks]
+        plt.xticks(radians_ticks, labels=degrees_labels)
+
+        plt.xlabel(r'$\theta_2$ / degrees')
         plt.ylabel(r'$p_{\theta_2}$')
         plt.title(f'Poincaré Section at $\mathcal{{H}} = {self.mechanical_energy}$ $\\text{{J}}$\n'
                   f'{self.model.capitalize()} model')
