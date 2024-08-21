@@ -15,16 +15,22 @@
 ### Development Directory Structure
 
 ```
-development/
+Double_Pendulum_App_Development/
 ├── JSONdata/
 ├── Notebooks/
 │   ├── DevelopmentSubClass.ipynb
-│   └── JSONTest.ipynb
-├── pyscripts/
-│   ├── __init__.py
-│   └── DoublePendulumSubclass.py
-├── __init__.py
-└── README.md
+│   ├── JSONTest.ipynb
+│   └── PoincareSections.ipynb
+├── PendulumModels/
+│   ├── DoublePendulumHamiltonian.py
+│   ├── DoublePendulumLagrangian.py
+├── .gitattributes
+├── DoublePendulumSubclass.py
+├── DoublePendulumSubclassDev.py
+├── DoublePendulumSubclassMomenta.py
+├── MathFunctions.py
+├── README.md
+└── requirements.txt
 ```
 
 1. ### [`DoublePendulumSubclass.py`](pyscripts/DoublePendulumSubclass.py)
