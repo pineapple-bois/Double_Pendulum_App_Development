@@ -1,11 +1,13 @@
 import sympy as sp
 import numpy as np
 import matplotlib.pyplot as plt
+import time
 from matplotlib import cm
 from matplotlib.ticker import FuncFormatter
 from scipy.integrate import odeint, solve_ivp
 import plotly.graph_objs as go
 from plotly.subplots import make_subplots
+from joblib import Parallel, delayed
 from MathFunctions import *
 
 
@@ -76,24 +78,28 @@ class DoublePendulum:
         ]
         return system
 
-    def _solve_ode(self, integrator, **integrator_args):
+    def _solve_ode(self, integrator, initial_conditions=None, **integrator_args):
         """
         Solve the system of ODEs using the specified integrator.
 
         Parameters:
         - integrator: The integrator function to use. Default is scipy's solve_ivp.
-        - system: The system function defining the ODEs.
+        - initial_conditions: The initial conditions for the ODE solver.
         - **integrator_args: Additional arguments specific to the chosen integrator.
         """
+        if initial_conditions is None:
+            initial_conditions = self.initial_conditions
+
         if integrator == odeint:
-            sol = odeint(self._system, self.initial_conditions, self.time, **integrator_args)
+            sol = odeint(self._system, initial_conditions, self.time, **integrator_args)
         elif integrator == solve_ivp:
             t_span = (self.time[0], self.time[-1])
-            sol = solve_ivp(lambda t, y: self._system(y, t), t_span, self.initial_conditions,
+            sol = solve_ivp(lambda t, y: self._system(y, t), t_span, initial_conditions,
                             t_eval=self.time, **integrator_args)
             sol = sol.y.T  # Transpose
         else:
             raise ValueError("Unsupported integrator")
+
         return sol
 
     def _calculate_positions(self):
@@ -316,31 +322,32 @@ class DoublePendulum:
 
 
 class DoublePendulumExplorer(DoublePendulum):
-    def __init__(self, parameters, time_vector, model, max_potential_energy, theta1_cross_section=0, theta2_range=(-np.pi, np.pi), **integrator_args):
-        """
-        Extend the DoublePendulum class to explore a range of initial conditions.
-
-        Parameters:
-        - theta2_range: Tuple of (min, max) in radians
-        """
+    def __init__(self, parameters, time_vector, model, mechanical_energy,
+                 theta1_cross_section=0, theta2_range=(-np.pi, np.pi), **integrator_args):
         super().__init__(parameters, [0, 0, 0, 0], time_vector, model, **integrator_args)
         print("DoublePendulumExplorer initialized with base class.")
         _, _, V = form_lagrangian(model)     # Returns Lagrangian, Kinetic Energy, Potential Energy
         self.V = V.subs(parameters)
-        self.max_potential_energy = max_potential_energy
+        self.mechanical_energy = mechanical_energy
         self.theta1_cross_section = theta1_cross_section
         self.theta2_range = theta2_range
         self._data_ready = False # Flag to track if simulation data is ready for structure computation
 
+    def time_graph(self):
+        raise NotImplementedError("This method is not applicable for DoublePendulumExplorer.")
+
+    def phase_path(self):
+        raise NotImplementedError("This method is not applicable for DoublePendulumExplorer.")
+
+    def animate_pendulum(self, fig_width=700, fig_height=700, trace=False, static=False, appearance='light'):
+        raise NotImplementedError("This method is not applicable for DoublePendulumExplorer.")
+
     def _calculate_potential_energy(self, theta1_val, theta2_val, model='simple'):
-        """
-        Calculate the potential energy of the double pendulum system based on the current angles.
-        """
         # Perform substitutions for the potential energy (V)
         if model == 'simple':
             V_zero = -(m1 + m2) * g * l1 - m2 * g * l2
         elif model == 'compound':
-            V_zero = -M1 * g * (l1 / 2) - M2 * g * (l1 + (l2 / 2))
+            V_zero = -M1 * g * (l1 / 2) - M2 * g * ((l1 + l2) / 2)
         else:
             raise ValueError("Model must be 'simple' or 'compound'")
         V_zero_numeric = V_zero.subs(self.parameters)
@@ -354,130 +361,102 @@ class DoublePendulumExplorer(DoublePendulum):
         # Evaluate the expression numerically
         return float(V_relative)
 
-    def time_graph(self):
-        raise NotImplementedError("This method is not applicable for DoublePendulumExplorer.")
-
-    def phase_path(self):
-        raise NotImplementedError("This method is not applicable for DoublePendulumExplorer.")
-
-    def animate_pendulum(self, fig_width=700, fig_height=700, trace=False, static=False, appearance='light'):
-        raise NotImplementedError("This method is not applicable for DoublePendulumExplorer.")
-
-    def _generate_initial_conditions(self, step_size=0.5):
+    def _generate_initial_conditions(self, step_size_degrees=0.5):
         """
-        Generate a range of initial conditions for theta2 while keeping other initial conditions fixed.
+        This method creates initial conditions where theta1 is fixed at 0, and theta2 varies from `self.theta2_range[0]`
+        to `self.theta2_range[1]` in increments of `step_size_degrees`. The momentum values are fixed at 0.
+
+        Parameters:
+        ----------
+        step_size_degrees : float, optional
+            The increment step size in degrees for generating theta2 values. Defaults to 0.5 degrees.
+
+        Returns:
+        -------
+        list of tuple
+            A list of tuples representing the initial conditions for the simulations. Each tuple has the form (theta1, theta2, p1, p2),
+            where theta1 is fixed at 0, theta2 varies according to the step size, and p1 and p2 are fixed at 0.
+
         """
-        number_points = int(360 / step_size)
-        theta2_vals = np.linspace(*self.theta2_range, number_points)
-        initial_conditions = [(0, th2, 0, 0) for th2 in theta2_vals]  # Fix other initial conditions
+        step_size_radians = np.deg2rad(step_size_degrees)
+        theta2_min, theta2_max = self.theta2_range
+        number_points = int((theta2_max - theta2_min) / step_size_radians)
+        theta2_vals = np.linspace(theta2_min, theta2_max, number_points)
+        initial_conditions = [(0, th2, 0, 0) for th2 in theta2_vals]
+
         return initial_conditions
 
     def _run_simulations(self, integrator=solve_ivp):
         """
-        Run simulations for each initial condition.
+        This method solves a system of ODEs for each set of initial conditions using the specified integrator, and stores
+        the results in `self.initial_condition_data`. The simulations are executed in parallel to leverage multiple CPU
+        cores and reduce computation time.
+
+        Notes:
+        -----
+        - This method uses the `joblib` library to parallelize the simulations across all available CPU cores (`n_jobs=-1`).
+          Each simulation is run independently, and results are collected asynchronously.
+        - The method `_generate_initial_conditions` is used to generate the initial conditions for the simulations.
+        - The method `_solve_ode` is called to solve the system of ODEs for each set of initial conditions. The results are
+          stored in `self.initial_condition_data`.
+        - If a simulation fails (e.g., due to numerical issues), the failure is caught and logged, and the simulation continues
+          for the other initial conditions.
+
         """
+        start_time = time.time()
+
         initial_conditions = self._generate_initial_conditions()
 
         num_simulations = len(initial_conditions)
         time_steps = self.time.size
-        variables_per_step = 4  # This is a constant for all simulations
+        variables_per_step = 4
 
         # Initialize NumPy array to store all simulation data
         self.initial_condition_data = np.empty((num_simulations, time_steps, variables_per_step))
 
-        for index, conditions in enumerate(initial_conditions):
-            self.initial_conditions = conditions
-            sol = self._solve_ode(integrator)
-            self.initial_condition_data[index] = sol
-        print("Simulations Complete.")
+        def run_single_simulation(index, conditions):
+            try:
+                sol = self._solve_ode(integrator, initial_conditions=conditions)
+            except Exception as e:
+                print(f"Simulation {index} failed: {e}")
+                return index, None
+            return index, sol
 
-    def _calculate_and_store_positions(self):
+        results = Parallel(n_jobs=-1)(
+            delayed(run_single_simulation)(index, cond) for index, cond in enumerate(initial_conditions))
+
+        for index, sol in results:
+            if sol is not None:
+                self.initial_condition_data[index] = sol
+
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+
+        print(f"Simulations Complete. Time taken: {elapsed_time:.2f} seconds.")
+
+    def find_poincare_section(self, energy_tolerance=1e-2, integrator=solve_ivp):
         """
-        Calculates the (x, y) positions of both pendulum bobs for each simulation in the initial_condition_data
-        and stores them in separate arrays.
+        Find the Poincaré section for the system based on the specified mechanical energy.
+
+        This method ensures that the necessary simulation data is generated by calling _run_simulations
+        if it has not already been done. It then computes the Poincaré section.
         """
-        num_simulations = self.initial_condition_data.shape[0]
-        time_steps = self.initial_condition_data.shape[1]
 
-        # Initialize arrays to store positions for pendulum bobs
-        self.x1_positions = np.zeros((num_simulations, time_steps))
-        self.y1_positions = np.zeros((num_simulations, time_steps))
-        self.x2_positions = np.zeros((num_simulations, time_steps))
-        self.y2_positions = np.zeros((num_simulations, time_steps))
-
-        for i in range(num_simulations):
-            simulation = self.initial_condition_data[i]
-            theta1 = simulation[:, 0]
-            theta2 = simulation[:, 1]
-
-            # Calculate positions using theta1 and theta2
-            l_1 = float(self.parameters[l1])
-            l_2 = float(self.parameters[l2])
-            x_1 = l_1 * np.sin(theta1)
-            y_1 = -l_1 * np.cos(theta1)
-            x_2 = x_1 + l_2 * np.sin(theta2)
-            y_2 = y_1 - l_2 * np.cos(theta2)
-
-            # Store the calculated positions
-            self.x1_positions[i] = x_1
-            self.y1_positions[i] = y_1
-            self.x2_positions[i] = x_2
-            self.y2_positions[i] = y_2
-
-        print("Positions calculated and stored.")
-
-    def _create_data_structure(self):
-        data_dict = {}
-        for i in range(self.initial_condition_data.shape[0]):  # Iterate over each simulation
-            # Assuming theta2's initial value is at column 1 (index 0) of the initial condition for each simulation
-            simulation_data = {
-                "theta1": self.initial_condition_data[i, :, 0],
-                "theta2": self.initial_condition_data[i, :, 1],
-                "p1": self.initial_condition_data[i, :, 2],
-                "p2": self.initial_condition_data[i, :, 3],
-                "x1": self.x1_positions[i],
-                "y1": self.y1_positions[i],
-                "x2": self.x2_positions[i],
-                "y2": self.y2_positions[i],
-            }
-            data_dict[i] = simulation_data
-        return data_dict
-
-    def get_simulation_data(self, integrator=solve_ivp):
-        """
-        Public method to access the simulation data dictionary.
-        This ensures that the simulations have run before data is accessed.
-        """
-        if not self._data_ready:
-            self._run_full_simulation_and_analysis(integrator)
-
-    def _run_full_simulation_and_analysis(self, integrator):
-        """
-        Runs the full simulation, calculates positions, and computes the data structure.
-        """
-        if not self._data_ready:
-            self._run_simulations(integrator)  # Run simulations
-            self._calculate_and_store_positions()  # Calculate positions
-            self.simulation_data_dict = self._create_data_structure()  # Compute the data structure directly
-            self._data_ready = True  # Set flag to indicate data is ready
-        else:
-            print("Data Present.")
-
-    def find_poincare_section(self, energy_tolerance=1e-2):
-        """
-        Find the Poincaré section for the system based on the max potential energy.
-        """
-        if not hasattr(self, 'simulation_data_dict') or not self.simulation_data_dict:
-            raise RuntimeError("Simulation data is not available. Ensure simulations are run first.")
+        # Run simulations if they haven't been run yet
+        if not hasattr(self, 'initial_condition_data') or self.initial_condition_data is None:
+            self._run_simulations(integrator=integrator)
 
         self.poincare_section_data = []
 
-        for sim_key, simulation in self.simulation_data_dict.items():
-            poincare_points = []
+        # Pre-calculate the mechanical energy tolerance for quick comparisons
+        max_mechanical_energy = self.mechanical_energy + energy_tolerance
 
-            theta1_values = simulation["theta1"]
-            theta2_values = simulation["theta2"]
-            p_theta_2_values = simulation["p2"]
+        for simulation in self.initial_condition_data:
+            theta1_values = simulation[:, 0]
+            theta2_values = simulation[:, 1]
+            p_theta_2_values = simulation[:, 3]
+
+            poincare_points = []
 
             for i in range(1, len(theta1_values)):
                 theta1_prev = theta1_values[i - 1]
@@ -491,18 +470,29 @@ class DoublePendulumExplorer(DoublePendulum):
                     p_theta_2_interp = p_theta_2_values[i - 1] + ratio * (p_theta_2_values[i] - p_theta_2_values[i - 1])
 
                     # Calculate potential energy at the crossing point
-                    potential_energy = self._calculate_potential_energy(self.theta1_cross_section, theta2_interp, self.model)
+                    potential_energy = self._calculate_potential_energy(self.theta1_cross_section, theta2_interp,
+                                                                        self.model)
 
-                    # Record if the potential energy is lower than or equal to the specified maximum
-                    if potential_energy <= self.max_potential_energy + energy_tolerance:
+                    # Record if the potential energy is within the allowed range
+                    if potential_energy <= max_mechanical_energy:
                         poincare_points.append((theta2_interp, p_theta_2_interp))
 
             if poincare_points:
                 self.poincare_section_data.append(poincare_points)
 
-    def plot_poincare_map(self):
+    def plot_poincare_map(self, special_angles_deg=None, xrange=(-np.pi, np.pi), yrange=None):
         """
-        Plot the Poincaré section based on the computed data.
+        Plot the Poincaré section based on the computed data, with options to highlight special angles and restrict axes.
+
+        Parameters:
+        ----------
+        special_angles_deg : list of float or None, optional
+            A list of angles in degrees for which special trajectories should be highlighted in black.
+            If None, no special trajectories are highlighted. Defaults to None.
+        xrange : tuple of float, optional
+            Limits for the x-axis in radians. Defaults to (-np.pi, np.pi).
+        yrange : tuple of float or None, optional
+            Limits for the y-axis. If None, the y-axis limits are set automatically. Defaults to None.
         """
         if not self.poincare_section_data:
             raise RuntimeError("No Poincaré data available. Run 'find_poincare_section' first.")
@@ -516,11 +506,36 @@ class DoublePendulumExplorer(DoublePendulum):
         for i, poincare_points in enumerate(self.poincare_section_data):
             if poincare_points:
                 theta2, p_theta_2 = zip(*poincare_points)
-                plt.scatter(theta2, p_theta_2, s=0.1, color=colors[i])
+                plt.scatter(theta2, p_theta_2, s=0.05, color=colors[i])
 
-        plt.xlim(-np.pi, np.pi)
-        plt.xlabel(r'$\theta_2$')
+        # Overlay special trajectories if special_angles_deg is provided
+        if special_angles_deg is not None:
+            special_indices = [(angle_deg + 180) / 0.5 for angle_deg in special_angles_deg]  # Calculate indices
+
+            for i, index in enumerate(special_indices):
+                index = int(index)
+                if 0 <= index < len(self.poincare_section_data):
+                    poincare_points = self.poincare_section_data[index]
+                    if poincare_points:
+                        theta2, p_theta_2 = zip(*poincare_points)
+                        plt.scatter(theta2, p_theta_2, s=0.1, color='black')
+
+        # Set x-axis limits
+        plt.xlim(xrange)
+
+        # Set y-axis limits if provided
+        if yrange is not None:
+            plt.ylim(yrange)
+
+        # Set x-axis ticks in radians with corresponding labels in degrees
+        radians_ticks = np.linspace(xrange[0], xrange[1], 7)
+        # Adjust any potential off-by-one errors
+        degrees_labels = [str(int(np.floor(np.rad2deg(tick)))) for tick in radians_ticks]
+        plt.xticks(radians_ticks, labels=degrees_labels)
+
+        plt.xlabel(r'$\theta_2$ / degrees')
         plt.ylabel(r'$p_{\theta_2}$')
-        plt.title(f'Poincaré Section at $E_{{\\text{{mech}}}} = {self.max_potential_energy}$ $\\text{{J}}$')
+        plt.title(f'Poincaré Section at $\mathcal{{H}} = {self.mechanical_energy}$ $\\text{{J}}$\n'
+                  f'{self.model.capitalize()} model')
         plt.grid(False)
         plt.show()

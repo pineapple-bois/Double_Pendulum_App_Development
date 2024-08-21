@@ -49,7 +49,7 @@ development/
    - The `find_poincare_section` method was updated to focus on energy-based crossings, where the potential energy at a given crossing is compared to a specified maximum potential energy level. This method was refactored to interpolate values at the crossing points and only record them if the energy condition is met.
 
 
-### The new class has been tested in [`NewIdeas.ipynb`](Notebooks/NewIdeas.ipynb) and the initial Poincaré plots look promising
+### The new class has been tested in [`PoincareSections.ipynb`](Notebooks/PoincareSections.ipynb) and the initial Poincaré plots look promising
 
 ---
 
