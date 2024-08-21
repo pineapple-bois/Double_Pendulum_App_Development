@@ -18,6 +18,7 @@
 
 ```
 Double_Pendulum_App_Development/
+├── BackUps/
 ├── JSONdata/
 ├── Notebooks/
 │   ├── DevelopmentSubClass.ipynb
@@ -28,6 +29,7 @@ Double_Pendulum_App_Development/
 │   ├── DoublePendulumLagrangian.py
 ├── .gitattributes
 ├── DoublePendulumSubclass.py
+├── DoublePendulumSubclassData.py
 ├── DoublePendulumSubclassDev.py
 ├── DoublePendulumSubclassMomenta.py
 ├── MathFunctions.py
