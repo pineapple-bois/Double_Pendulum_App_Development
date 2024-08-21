@@ -436,19 +436,16 @@ class DoublePendulumExplorer(DoublePendulum):
             debug_count = 0
             max_debug = 5
 
-            tolerance = 1e-9  # Define a small tolerance value
+            tolerance = 1e-2  # Define a small tolerance value
 
             for i in range(1, len(theta1_values)):
                 theta1_prev = theta1_values[i - 1]
                 theta1_curr = theta1_values[i]
 
-                # # Check for traditional crossing or near-crossing using tolerance
-                # if (theta1_prev * theta1_curr < 0) or \
-                #         (abs(theta1_curr) < tolerance and theta1_prev * theta1_curr < 0) or \
-                #         (abs(theta1_prev) < tolerance and theta1_prev * theta1_curr < 0):
-
-                # Check for crossing or near-crossing with tolerance
-                if theta1_prev * theta1_curr < tolerance:
+                # Check for traditional crossing or near-crossing using tolerance
+                if (theta1_prev * theta1_curr < 0) or \
+                        (abs(theta1_curr) < tolerance and theta1_prev * theta1_curr < 0) or \
+                        (abs(theta1_prev) < tolerance and theta1_prev * theta1_curr < 0):
 
                     # Interpolation for the crossing point
                     ratio = -theta1_prev / (theta1_curr - theta1_prev)
@@ -460,11 +457,15 @@ class DoublePendulumExplorer(DoublePendulum):
                     #     print(f"[DEBUG] Simulation {sim_idx}, Crossing Detected: theta2_interp = {theta2_interp}, p_theta_2_interp = {p_theta_2_interp}")
                     #     debug_count += 1
 
-                    poincare_points.append((theta2_interp, p_theta_2_interp))
+                    # Store as float32
+                    poincare_points.append((np.float32(theta2_interp), np.float32(p_theta_2_interp)))
+
+                    # Below is default float64
+                    #poincare_points.append((theta2_interp, p_theta_2_interp))
 
             if poincare_points:
                 self.poincare_section_data.append(poincare_points)
-                print(f"[DEBUG] Simulation {sim_idx}: {len(poincare_points)} Poincaré points detected.")
+                #print(f"[DEBUG] Simulation {sim_idx}: {len(poincare_points)} Poincaré points detected.")
             else:
                 print(f"[DEBUG] Simulation {sim_idx}: No Poincaré points detected.")
 
