@@ -62,7 +62,7 @@ def form_lagrangian(model='simple'):
         y1 = -l1 / 2 * sp.cos(theta1)
         # Rod 2
         x2 = x1 + l2 / 2 * sp.sin(theta2)
-        y2 = y1 - l2 / 2 * sp.cos(theta2)
+        y2 = -l1 * sp.cos(theta1) - l2 / 2 * sp.cos(theta2)
 
     # Handling incorrect model types
     else:
