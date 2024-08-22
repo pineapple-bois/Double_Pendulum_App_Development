@@ -545,15 +545,13 @@ class DoublePendulumExplorer(DoublePendulum):
         if yrange is not None:
             plt.ylim(yrange)
 
-        # Set x-axis ticks in radians with corresponding labels in degrees
-        radians_ticks = np.linspace(xrange[0], xrange[1], 7)
-        # Adjust any potential off-by-one errors
-        degrees_labels = [str(int(np.floor(np.rad2deg(tick)))) for tick in radians_ticks]
-        plt.xticks(radians_ticks, labels=degrees_labels)
+        # Set x-axis ticks
+        plt.gca().xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{int(np.round(np.rad2deg(x)))}'))
+        plt.xticks(np.linspace(xrange[0], xrange[1], 7))  # Control the number of ticks
 
         plt.xlabel(r'$\theta_2$ / degrees')
         plt.ylabel(r'$p_{\theta_2}$')
-        plt.title(f'Poincaré Section at $\mathcal{{H}} = {self.mechanical_energy}$ $\\text{{J}}$\n'
+        plt.title(f'Poincaré Section with $\mathcal{{H}} \leq {self.mechanical_energy}$ $\\text{{J}}$\n'
                   f'{self.model.capitalize()} model')
         plt.grid(False)
         plt.show()
