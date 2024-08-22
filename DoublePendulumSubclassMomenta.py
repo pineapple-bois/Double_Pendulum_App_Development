@@ -92,15 +92,14 @@ class DoublePendulum:
 
         if integrator == odeint:
             sol = odeint(self._system, initial_conditions, self.time, **integrator_args)
+            return sol
         elif integrator == solve_ivp:
             t_span = (self.time[0], self.time[-1])
             sol = solve_ivp(lambda t, y: self._system(y, t), t_span, initial_conditions,
                             t_eval=self.time, **integrator_args)
-            sol = sol.y.T  # Transpose
+            return sol.y.T  # Transpose
         else:
             raise ValueError("Unsupported integrator")
-
-        return sol
 
     def _calculate_positions(self):
         # Unpack solution for theta1 and theta2
@@ -363,7 +362,7 @@ class DoublePendulumExplorer(DoublePendulum):
 
         return initial_conditions
 
-    def _run_simulations(self, integrator=solve_ivp):
+    def _run_simulations(self, integrator=solve_ivp, batch_size=80, sleep_time=3, **integrator_args):
         """
         This method solves a system of ODEs for each set of initial conditions using the specified integrator, and stores
         the results in `self.initial_condition_data`. The simulations are executed in parallel to leverage multiple CPU
@@ -393,25 +392,55 @@ class DoublePendulumExplorer(DoublePendulum):
 
         def run_single_simulation(index, conditions):
             try:
-                sol = self._solve_ode(integrator, initial_conditions=conditions)
+                sol = self._solve_ode(integrator, initial_conditions=conditions, **integrator_args)
+                return index, sol
             except Exception as e:
                 print(f"Simulation {index} failed: {e}")
                 return index, None
-            return index, sol
 
-        results = Parallel(n_jobs=-1)(
-            delayed(run_single_simulation)(index, cond) for index, cond in enumerate(initial_conditions))
+        # # Run all the simulations in parallel
+        # results = Parallel(n_jobs=-1)(
+        #     delayed(run_single_simulation)(index, cond) for index, cond in enumerate(initial_conditions))
+        #
+        # # Store the results in the initial_condition_data array
+        # for index, sol in results:
+        #     if sol is not None:
+        #         self.initial_condition_data[index] = sol
 
-        for index, sol in results:
-            if sol is not None:
-                self.initial_condition_data[index] = sol
+        # Process simulations in batches
+        for batch_start in range(0, num_simulations, batch_size):
+            batch_end = min(batch_start + batch_size, num_simulations)
+            batch_conditions = initial_conditions[batch_start:batch_end]
+
+            # Record batch start time
+            batch_start_time = time.time()
+
+            # Run the simulations in parallel for this batch
+            results = Parallel(n_jobs=-3)(
+                delayed(run_single_simulation)(batch_start + index, cond) for index, cond in
+                enumerate(batch_conditions))
+
+            # Store the results in the initial_condition_data array
+            for index, sol in results:
+                if sol is not None:
+                    self.initial_condition_data[index] = sol
+
+            # Record batch end time
+            batch_end_time = time.time()
+            batch_elapsed_time = batch_end_time - batch_start_time
+
+            print(f"Batch {batch_start // batch_size + 1} of {num_simulations // batch_size} complete. "
+                  f"Time taken: {batch_elapsed_time:.2f} seconds.")
+
+            # Sleep between batches to allow my poor computer to cool down
+            time.sleep(sleep_time)
 
         end_time = time.time()
         elapsed_time = end_time - start_time
 
         print(f"Simulations Complete. Time taken: {elapsed_time:.2f} seconds.")
 
-    def find_poincare_section(self, integrator=solve_ivp):
+    def find_poincare_section(self, integrator=solve_ivp, **integrator_args):
         """
         Find the Poincaré section for the system based on the specified mechanical energy.
 
@@ -421,7 +450,7 @@ class DoublePendulumExplorer(DoublePendulum):
 
         # Run simulations if they haven't been run yet
         if not hasattr(self, 'initial_condition_data') or self.initial_condition_data is None:
-            self._run_simulations(integrator=integrator)
+            self._run_simulations(integrator=integrator, **integrator_args)
 
         self.poincare_section_data = []
 
@@ -528,3 +557,4 @@ class DoublePendulumExplorer(DoublePendulum):
                   f'{self.model.capitalize()} model')
         plt.grid(False)
         plt.show()
+
