@@ -362,7 +362,7 @@ class DoublePendulumExplorer(DoublePendulum):
 
         return initial_conditions
 
-    def _run_simulations(self, integrator=solve_ivp, batch_size=80, sleep_time=3, **integrator_args):
+    def _run_simulations(self, integrator=solve_ivp, batch_size=80, sleep_time=5, **integrator_args):
         """
         This method solves a system of ODEs for each set of initial conditions using the specified integrator, and stores
         the results in `self.initial_condition_data`. The simulations are executed in parallel to leverage multiple CPU
