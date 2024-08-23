@@ -110,7 +110,7 @@ class DoublePendulum:
 
                     # Define an event to detect large deviations
                     def event_large_deviation(t, y):
-                        max_angle_limit = 10 * np.pi
+                        max_angle_limit = 10 * (2 * np.pi)   # Allow 10 loops - May need to be tweaked
                         return max_angle_limit - max(np.abs(y[0]), np.abs(y[1]))
 
                     event_large_deviation.terminal = True  # Stop the integration
@@ -208,7 +208,119 @@ class DoublePendulum:
         """
         self.precomputed_positions = np.array(self._calculate_positions())
 
-    def animate_pendulum(self, fig_width=700, fig_height=700, trace=False, static=False, appearance='light'):
+    @staticmethod
+    def _get_appearance_settings(appearance):
+        if appearance == 'dark':
+            return {
+                'pendulum_color': 'rgba(255, 255, 255, 0.9)',
+                'trace_color_theta1': 'rgba(255, 165, 0, 0.6)',
+                'trace_color_theta2': 'rgba(0, 255, 0, 0.6)',
+                'background_color': 'rgb(17, 17, 17)',
+                'text_color': 'rgba(255, 255, 255, 0.9)',
+                'grid_color': 'rgba(255, 255, 255, 0.3)'
+            }
+        elif appearance == 'light':
+            return {
+                'pendulum_color': 'navy',
+                'trace_color_theta1': 'darkorange',
+                'trace_color_theta2': 'green',
+                'background_color': 'rgb(255, 255, 255)',
+                'text_color': 'rgb(0, 0, 0)',
+                'grid_color': 'rgba(0, 0, 0, 0.1)'
+            }
+        else:
+            raise ValueError("Invalid appearance setting. Please choose 'dark' or 'light'.")
+
+    @staticmethod
+    def _calculate_axis_range(x_1, y_1, x_2, y_2):
+        max_extent = max(
+            np.max(np.abs(x_1)),
+            np.max(np.abs(y_1)),
+            np.max(np.abs(x_2)),
+            np.max(np.abs(y_2))
+        )
+        padding = 0.1 * max_extent  # 10% padding
+        return [-max_extent - padding, max_extent + padding]
+
+    @staticmethod
+    def _create_base_layout(axis_range, appearance_settings, fig_width, fig_height, static):
+        base_layout = dict(
+            plot_bgcolor=appearance_settings['background_color'],
+            paper_bgcolor=appearance_settings['background_color'],
+            xaxis=dict(
+                showgrid=True, gridwidth=1, gridcolor=appearance_settings['grid_color'],
+                range=axis_range,
+                autorange=False, zeroline=False, tickcolor=appearance_settings['text_color'],
+                tickfont=dict(size=12, color=appearance_settings['text_color']),
+            ),
+            yaxis=dict(
+                showgrid=True, gridwidth=1, gridcolor=appearance_settings['grid_color'],
+                range=axis_range,
+                autorange=False, zeroline=False,
+                scaleanchor='x', scaleratio=1,
+                tickcolor=appearance_settings['text_color'],
+                tickfont=dict(size=12, color=appearance_settings['text_color']),
+            ),
+            autosize=False,
+            width=fig_width,
+            height=fig_height,
+
+            updatemenus=[{
+                'type': 'buttons',
+                'buttons': [
+                    dict(
+                        label="Play",
+                        method="animate",
+                        args=[None, {"frame": {"duration": 33, "redraw": True},
+                                    "fromcurrent": True,
+                                    "mode": "immediate",
+                                    'label': 'Play',
+                                    'font': {'size': 14, 'color': 'black'},
+                                    'bgcolor': 'lightblue'
+                        }],
+                    )
+                ],
+                'direction': "left",
+                'pad': {"r": 10, "t": 10},  # Adjust padding if needed
+                'showactive': False,
+                'x': 0.05,  # Position for x
+                'y': 0.95,  # Position for y,(the top of the figure)
+                'xanchor': "left",
+                'yanchor': "top"
+            }],
+
+            margin=dict(l=20, r=20, t=20, b=20),
+        )
+
+        if static:
+            static_updates = dict(
+                xaxis_fixedrange=True,  # Disables horizontal zoom/pan
+                yaxis_fixedrange=True,  # Disables vertical zoom/pan
+                dragmode=False,         # Disables dragging
+                showlegend=False        # Hides legend
+            )
+            base_layout.update(static_updates)
+
+        return base_layout
+
+    @staticmethod
+    def _create_trace(x, y, trace_name, color, mode='lines', width=1):
+        return go.Scatter(
+            x=x, y=y,
+            mode=mode,
+            name=trace_name,
+            line=dict(width=width, color=color)
+        )
+
+    @staticmethod
+    def _create_animation_frames(x_1, y_1, x_2, y_2, step=10):
+        return [
+            go.Frame(data=[go.Scatter(x=[0, x_1[k], x_2[k]], y=[0, y_1[k], y_2[k]],
+                                      mode='lines+markers', line=dict(width=2))])
+            for k in range(0, len(x_1), step)
+        ]
+
+    def animate_pendulum(self, fig_width=700, fig_height=700, trace=True, static=False, appearance='light'):
         """
         Generates an animation for the double pendulum using precomputed positions.
 
@@ -225,380 +337,27 @@ class DoublePendulum:
         Returns:
             A Plotly figure object containing the animation.
         """
-        # Check if precomputed_positions has been calculated
         if not hasattr(self, 'precomputed_positions') or self.precomputed_positions is None:
             raise AttributeError("Precomputed positions must be calculated before animating. "
                                  "Please call 'precompute_positions' method first.")
 
         x_1, y_1, x_2, y_2 = self.precomputed_positions
+        appearance_settings = self._get_appearance_settings(appearance)
+        axis_range = self._calculate_axis_range(x_1, y_1, x_2, y_2)
 
-        # Check appearance and set colors
-        if appearance == 'dark':
-            pendulum_color = 'rgba(255, 255, 255, 0.9)'  # White with slight transparency for visibility
-            trace_color_theta1 = 'rgba(255, 165, 0, 0.6)'  # Soft orange with transparency for trace of P1
-            trace_color_theta2 = 'rgba(0, 255, 0, 0.6)'  # Soft green with transparency for trace of P2
-            background_color = 'rgb(17, 17, 17)'  # Very dark (almost black) for the plot background
-            text_color = 'rgba(255, 255, 255, 0.9)'  # White text color for better visibility in dark mode
-            grid_color = 'rgba(255, 255, 255, 0.3)'  # Light grey for grid lines
-
-        elif appearance == 'light':
-            pendulum_color = 'navy'  # Dark blue for better visibility against light background
-            trace_color_theta1 = 'darkorange'  # Dark orange for a vivid contrast for trace of P1
-            trace_color_theta2 = 'green'  # Dark green for trace of P2
-            background_color = 'rgb(255, 255, 255)'  # White for the plot background
-            text_color = 'rgb(0, 0, 0)'  # Black text color for better visibility in light mode
-            grid_color = 'rgba(0, 0, 0, 0.1)'  # Light black (gray) for grid lines, with transparency for subtlety
-
-        else:
-            print("Invalid appearance setting. Please choose 'dark' or 'light'.")
-            return None  # Exit the function if invalid appearance
-
-        # Create figure with initial trace
         fig = go.Figure(
-            data=[go.Scatter(
-                x=[0, x_1[0], x_2[0]],
-                y=[0, y_1[0], y_2[0]],
-                mode='lines+markers',
-                name='Pendulum',
-                line=dict(width=2, color=pendulum_color),
-                marker=dict(size=10, color=pendulum_color)
-            )]
+            data=[self._create_trace([0, x_1[0], x_2[0]], [0, y_1[0], y_2[0]], 'Pendulum',
+                                     appearance_settings['pendulum_color'], mode='lines+markers', width=2)]
         )
 
-        # If trace is True, add path traces
         if trace:
-            path_1 = go.Scatter(
-                x=x_1, y=y_1,
-                mode='lines',
-                name='Path of P1',
-                line=dict(width=1, color=trace_color_theta1),
-            )
-            path_2 = go.Scatter(
-                x=x_2, y=y_2,
-                mode='lines',
-                name='Path of P2',
-                line=dict(width=1, color=trace_color_theta2),
-            )
-            fig.add_trace(path_1)
-            fig.add_trace(path_2)
+            fig.add_trace(self._create_trace(x_1, y_1, 'Path of P1', appearance_settings['trace_color_theta1']))
+            fig.add_trace(self._create_trace(x_2, y_2, 'Path of P2', appearance_settings['trace_color_theta2']))
 
-        # Calculate the max extent based on the precomputed positions
-        max_extent = max(
-            np.max(np.abs(x_1)),
-            np.max(np.abs(y_1)),
-            np.max(np.abs(x_2)),
-            np.max(np.abs(y_2))
-        )
-
-        # Add padding to the max extent
-        padding = 0.1 * max_extent  # 10% padding
-        axis_range_with_padding = [-max_extent - padding, max_extent + padding]
-
-        # Add frames to the animation
-        step = 10
-        frames = [go.Frame(data=[go.Scatter(x=[0, x_1[k], x_2[k]], y=[0, y_1[k], y_2[k]],
-                                            mode='lines+markers',
-                                            line=dict(width=2))])
-                  for k in range(0, len(x_1), step)]  # Use a step to reduce the number of frames
-        fig.frames = frames
-
-        # Define the base layout configuration
-        base_layout = dict(
-            plot_bgcolor=background_color,
-            paper_bgcolor=background_color,
-            xaxis=dict(
-                showgrid=True, gridwidth=1, gridcolor=grid_color,
-                range=axis_range_with_padding,
-                autorange=False, zeroline=False, tickcolor=text_color,
-                tickfont=dict(size=12, color=text_color),
-            ),
-            yaxis=dict(
-                showgrid=True, gridwidth=1, gridcolor=grid_color,
-                range=axis_range_with_padding,
-                autorange=False, zeroline=False,
-                scaleanchor='x', scaleratio=1,
-                tickcolor=text_color,
-                tickfont=dict(size=12, color=text_color),
-            ),
-            autosize=False,
-            width=fig_width,
-            height=fig_height,
-
-        updatemenus=[{
-            'type': 'buttons',
-            'buttons': [
-                dict(
-                    label="Play",
-                    method="animate",
-                    args=[None, {"frame": {"duration": 33, "redraw": True}, "fromcurrent": True,
-                                "mode": "immediate",
-                                'label': 'Play',
-                                'font': {'size': 14, 'color': 'black'},
-                                'bgcolor': 'lightblue'
-                    }],
-                )
-            ],
-            'direction': "left",
-            'pad': {"r": 10, "t": 10},  # Adjust padding if needed
-            'showactive': False,
-            'type': 'buttons',
-            'x': 0.05,  # Position for x
-            'y': 0.95,  # Position for y,(the top of the figure)
-            'xanchor': "left",
-            'yanchor': "top"
-        }],
-        margin=dict(l=20, r=20, t=20, b=20),
-        )
-        # Update the layout based on the 'static' argument
-        if static:
-            static_updates = dict(
-                xaxis_fixedrange=True,  # Disables horizontal zoom/pan
-                yaxis_fixedrange=True,  # Disables vertical zoom/pan
-                dragmode=False,         # Disables dragging
-                showlegend=False        # Hides legend
-            )
-            fig.update_layout(**base_layout, **static_updates)
-        else:
-            fig.update_layout(**base_layout)
+        fig.frames = self._create_animation_frames(x_1, y_1, x_2, y_2)
+        fig.update_layout(self._create_base_layout(axis_range, appearance_settings, fig_width, fig_height, static))
 
         return fig
-
-
-class DoublePendulumExplorer(DoublePendulum):
-    def __init__(self, parameters, time_vector, model, mechanical_energy,
-                 theta2_range=(-np.pi, np.pi), **integrator_args):
-        super().__init__(parameters, [0, 0, 0, 0], time_vector, model, **integrator_args)
-        print("DoublePendulumExplorer initialized with base class.")
-        self.mechanical_energy = mechanical_energy
-        self.theta2_range = theta2_range
-
-    def time_graph(self):
-        raise NotImplementedError("This method is not applicable for DoublePendulumExplorer.")
-
-    def phase_path(self):
-        raise NotImplementedError("This method is not applicable for DoublePendulumExplorer.")
-
-    def animate_pendulum(self, fig_width=700, fig_height=700, trace=False, static=False, appearance='light'):
-        raise NotImplementedError("This method is not applicable for DoublePendulumExplorer.")
-
-    def _generate_initial_conditions(self, step_size_degrees=0.5):
-        """
-        This method creates initial conditions where theta1 is fixed at 0, and theta2 varies from `self.theta2_range[0]`
-        to `self.theta2_range[1]` in increments of `step_size_degrees`. The momentum values are fixed at 0.
-
-        Parameters:
-        ----------
-        step_size_degrees : float, optional
-            The increment step size in degrees for generating theta2 values. Defaults to 0.5 degrees.
-
-        Returns:
-        -------
-        list of tuple
-            A list of tuples representing the initial conditions for the simulations. Each tuple has the form (theta1, theta2, p1, p2),
-            where theta1 is fixed at 0, theta2 varies according to the step size, and p1 and p2 are fixed at 0.
-
-        """
-        step_size_radians = np.deg2rad(step_size_degrees)
-        theta2_min, theta2_max = self.theta2_range
-        number_points = int((theta2_max - theta2_min) / step_size_radians)
-        theta2_vals = np.linspace(theta2_min, theta2_max, number_points)
-        initial_conditions = [(0, th2, 0, 0) for th2 in theta2_vals]
-
-        return initial_conditions
-
-    def _run_simulations(self, integrator=solve_ivp, batch_size=80, sleep_time=3, **integrator_args):
-        """
-        This method solves a system of ODEs for each set of initial conditions using the specified integrator, and stores
-        the results in `self.initial_condition_data`. The simulations are executed in parallel to leverage multiple CPU
-        cores and reduce computation time.
-
-        Notes:
-        -----
-        - This method uses the `joblib` library to parallelize the simulations across all available CPU cores (`n_jobs=-1`).
-          Each simulation is run independently, and results are collected asynchronously.
-        - The method `_generate_initial_conditions` is used to generate the initial conditions for the simulations.
-        - The method `_solve_ode` is called to solve the system of ODEs for each set of initial conditions. The results are
-          stored in `self.initial_condition_data`.
-        - If a simulation fails (e.g., due to numerical issues), the failure is caught and logged, and the simulation continues
-          for the other initial conditions.
-
-        """
-        start_time = time.time()
-
-        initial_conditions = self._generate_initial_conditions()
-
-        num_simulations = len(initial_conditions)
-        time_steps = self.time.size
-        variables_per_step = 4
-
-        # Initialize NumPy array to store all simulation data
-        self.initial_condition_data = np.empty((num_simulations, time_steps, variables_per_step))
-
-        def run_single_simulation(index, conditions):
-            try:
-                sol = self._solve_ode(integrator, initial_conditions=conditions, **integrator_args)
-                return index, sol
-            except Exception as e:
-                print(f"Simulation {index} failed: {e}")
-                return index, None
-
-        # # Run all the simulations in parallel
-        # results = Parallel(n_jobs=-1)(
-        #     delayed(run_single_simulation)(index, cond) for index, cond in enumerate(initial_conditions))
-        #
-        # # Store the results in the initial_condition_data array
-        # for index, sol in results:
-        #     if sol is not None:
-        #         self.initial_condition_data[index] = sol
-
-        # Process simulations in batches
-        for batch_start in range(0, num_simulations, batch_size):
-            batch_end = min(batch_start + batch_size, num_simulations)
-            batch_conditions = initial_conditions[batch_start:batch_end]
-
-            # Record batch start time
-            batch_start_time = time.time()
-
-            # Run the simulations in parallel for this batch
-            results = Parallel(n_jobs=-3)(
-                delayed(run_single_simulation)(batch_start + index, cond) for index, cond in
-                enumerate(batch_conditions))
-
-            # Store the results in the initial_condition_data array
-            for index, sol in results:
-                if sol is not None:
-                    self.initial_condition_data[index] = sol
-
-            # Record batch end time
-            batch_end_time = time.time()
-            batch_elapsed_time = batch_end_time - batch_start_time
-
-            print(f"Batch {batch_start // batch_size + 1} of {num_simulations // batch_size} complete. "
-                  f"Time taken: {batch_elapsed_time:.2f} seconds.")
-
-            # Sleep between batches to allow my poor computer to cool down
-            time.sleep(sleep_time)
-
-        end_time = time.time()
-        elapsed_time = end_time - start_time
-
-        print(f"Simulations Complete. Time taken: {elapsed_time:.2f} seconds.")
-
-    def find_poincare_section(self, integrator=solve_ivp, **integrator_args):
-        """
-        Find the Poincaré section for the system based on the specified mechanical energy.
-
-        This method ensures that the necessary simulation data is generated by calling _run_simulations
-        if it has not already been done. It then computes the Poincaré section.
-        """
-
-        # Run simulations if they haven't been run yet
-        if not hasattr(self, 'initial_condition_data') or self.initial_condition_data is None:
-            self._run_simulations(integrator=integrator, **integrator_args)
-
-        self.poincare_section_data = []
-
-        for sim_idx, simulation in enumerate(self.initial_condition_data):
-            theta1_values = simulation[:, 0]
-            theta2_values = simulation[:, 1]
-            p_theta_2_values = simulation[:, 3]
-
-            poincare_points = []
-
-            # Reset debug counter for each simulation
-            debug_count = 0
-            max_debug = 5
-
-            tolerance = 1e-2  # Define a small tolerance value
-
-            for i in range(1, len(theta1_values)):
-                theta1_prev = theta1_values[i - 1]
-                theta1_curr = theta1_values[i]
-
-                # Check for traditional crossing or near-crossing using tolerance
-                if (theta1_prev * theta1_curr < 0) or \
-                        (abs(theta1_curr) < tolerance and theta1_prev * theta1_curr < 0) or \
-                        (abs(theta1_prev) < tolerance and theta1_prev * theta1_curr < 0):
-
-                    # Interpolation for the crossing point
-                    ratio = -theta1_prev / (theta1_curr - theta1_prev)
-                    theta2_interp = theta2_values[i - 1] + ratio * (theta2_values[i] - theta2_values[i - 1])
-                    p_theta_2_interp = p_theta_2_values[i - 1] + ratio * (p_theta_2_values[i] - p_theta_2_values[i - 1])
-
-                    # Optional debug statement to track detected crossings
-                    # if debug_count < max_debug:
-                    #     print(f"[DEBUG] Simulation {sim_idx}, Crossing Detected: theta2_interp = {theta2_interp}, p_theta_2_interp = {p_theta_2_interp}")
-                    #     debug_count += 1
-
-                    # Store as float32
-                    poincare_points.append((np.float32(theta2_interp), np.float32(p_theta_2_interp)))
-
-                    # Below is default float64
-                    #poincare_points.append((theta2_interp, p_theta_2_interp))
-
-            if poincare_points:
-                self.poincare_section_data.append(poincare_points)
-                #print(f"[DEBUG] Simulation {sim_idx}: {len(poincare_points)} Poincaré points detected.")
-            else:
-                print(f"[DEBUG] Simulation {sim_idx}: No Poincaré points detected.")
-
-    def plot_poincare_map(self, special_angles_deg=None, xrange=(-np.pi, np.pi), yrange=None):
-        """
-        Plot the Poincaré section based on the computed data, with options to highlight special angles and restrict axes.
-
-        Parameters:
-        ----------
-        special_angles_deg : list of float or None, optional
-            A list of angles in degrees for which special trajectories should be highlighted in black.
-            If None, no special trajectories are highlighted. Defaults to None.
-        xrange : tuple of float, optional
-            Limits for the x-axis in radians. Defaults to (-np.pi, np.pi).
-        yrange : tuple of float or None, optional
-            Limits for the y-axis. If None, the y-axis limits are set automatically. Defaults to None.
-        """
-        if not self.poincare_section_data:
-            raise RuntimeError("No Poincaré data available. Run 'find_poincare_section' first.")
-
-        plt.figure(figsize=(10, 10))
-
-        # Create a colormap that contains as many colors as there are initial conditions
-        colors = cm.viridis(np.linspace(0, 1, len(self.poincare_section_data)))
-
-        # Plot each trajectory with a different color
-        for i, poincare_points in enumerate(self.poincare_section_data):
-            if poincare_points:
-                theta2, p_theta_2 = zip(*poincare_points)
-                plt.scatter(theta2, p_theta_2, s=0.05, color=colors[i])
-
-        # Overlay special trajectories if special_angles_deg is provided
-        if special_angles_deg is not None:
-            special_indices = [(angle_deg + 180) / 0.5 for angle_deg in special_angles_deg]  # Calculate indices
-
-            for i, index in enumerate(special_indices):
-                index = int(index)
-                if 0 <= index < len(self.poincare_section_data):
-                    poincare_points = self.poincare_section_data[index]
-                    if poincare_points:
-                        theta2, p_theta_2 = zip(*poincare_points)
-                        plt.scatter(theta2, p_theta_2, s=0.1, color='black')
-
-        # Set x-axis limits
-        plt.xlim(xrange)
-
-        # Set y-axis limits if provided
-        if yrange is not None:
-            plt.ylim(yrange)
-
-        # Set x-axis ticks
-        plt.gca().xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{int(np.round(np.rad2deg(x)))}'))
-        plt.xticks(np.linspace(xrange[0], xrange[1], 7))  # Control the number of ticks
-
-        plt.xlabel(r'$\theta_2$ / degrees')
-        plt.ylabel(r'$p_{\theta_2}$')
-        plt.title(f'Poincaré Section with $\mathcal{{H}} \leq {self.mechanical_energy}$ $\\text{{J}}$\n'
-                  f'{self.model.capitalize()} model')
-        plt.grid(False)
-        plt.show()
 
 
 class DoublePendulumEnsemble(DoublePendulum):
@@ -630,7 +389,6 @@ class DoublePendulumEnsemble(DoublePendulum):
         """
         Calculate the potential energy of the double pendulum system relative to the datum where theta1 = 0 and theta2 = 0.
         """
-        # Define symbolic variables
         if self.model == 'simple':
             V = -(m1 + m2) * g * l1 * sp.cos(theta1) - m2 * g * l2 * sp.cos(theta2)
 
