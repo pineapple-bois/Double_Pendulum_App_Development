@@ -92,7 +92,7 @@ class DoublePendulum:
             initial_conditions = self.initial_conditions
 
         # Open the CSV file in append mode
-        with open("raw_termination_data.csv", 'a', newline='') as csvfile:
+        with open("termination_data/raw_termination_data.csv", 'a', newline='') as csvfile:
             fieldnames = ['initial_conditions', 'termination_time', 'termination_reason']
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
@@ -110,7 +110,7 @@ class DoublePendulum:
 
                     # Define an event to detect large deviations
                     def event_large_deviation(t, y):
-                        max_angle_limit = 10 * (2 * np.pi)   # Allow 10 loops - May need to be tweaked
+                        max_angle_limit = 15 * (2 * np.pi)   # Allow 15 loops - May need to be tweaked
                         return max_angle_limit - max(np.abs(y[0]), np.abs(y[1]))
 
                     event_large_deviation.terminal = True  # Stop the integration
@@ -447,6 +447,16 @@ class DoublePendulumEnsemble(DoublePendulum):
         while len(random_conditions) < num_random_samples:
             random_theta1 = round(np.random.uniform(self.theta1_range[0], self.theta1_range[1]), 5)
             random_theta2 = round(np.random.uniform(self.theta2_range[0], self.theta2_range[1]), 5)
+
+            # Add filtering conditions
+            if random_theta1 > np.deg2rad(150):
+                continue
+
+            if random_theta2 > np.deg2rad(120) and random_theta1 > np.deg2rad(100):
+                continue
+
+            # Potentially add more conditions here
+
             potential_energy = self.calculate_potential_energy(random_theta1, random_theta2)
 
             if potential_energy <= self.mechanical_energy:
