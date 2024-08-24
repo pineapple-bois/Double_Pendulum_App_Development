@@ -1,121 +1,175 @@
 # Extension of the [Double Pendulum App](https://github.com/pineapple-bois/Double_Pendulum_App/tree/main). 
 
-### Development of the `Chaos` page steps
+### Development of the `Chaos` page tasks:
 
 
-1. #### Extend the `DoublePendulum` class to `DoublePendulumExplorer` capable of integrating a range of initial conditions. 
-   - Specifically; $\theta_2 \in [-\pi, \pi], \text{step}=0.5^{\circ}$ and $t \in [0, 120]\text{s}$
-2. #### Write a data dictionary in JSON format of all angles, velocities and positions 
-   - Currently these use the Lagrangian and are 2 x 9Gb!
-3. #### Host this data as a PostgreSQL DB on a cloud server (aiming for v.cheap/free)
-4. #### Iterate over and slice the DB to plot Poincaré sections and Lyapunov exponents
+1. #### Extend the `DoublePendulum` class to `DoublePendulumSubclass...` capable of instantiating a set of `DoublePendulum` objects, iterating over a range of initial conditions.
+   
+   - Subclasses will be developed separately, each one responsible for a different feature; Poincaré maps, Lyapunov exponents, Bifurcation diagrams, Data collation etc...
+2. #### Write a data dictionary in JSON format of all angles, velocities, momenta and positions.
+3. #### Host this data as a PostgreSQL DB on a cloud server (aiming for v.cheap/free).
+4. #### Instead of deriving a double pendulum system 'on-the-fly', we will pull data from the database with simple slicing queries.
 
 ----
 
-### All of the above will form the basis of a new page for the web app. Instead of deriving a double pendulum system 'on-the-fly', we will pull data from the database with simple slicing queries.
+### Pendulum Models
 
-### Development Directory Structure
+![img](Images/Models_Joint_White.png)
+
+----
+
+### Directory Structure
 
 ```
 Double_Pendulum_App_Development/
 ├── BackUps/
+├── Images/
 ├── JSONdata/
 ├── Notebooks/
+│   │   ├── AnalysisData/
+│   │   └── DataAnalysisNBs/
+│   │       ├── ResourceDataAnalysis.ipynb
+│   │       └── TerminationDataAnalysis.ipynb
 │   ├── DevelopmentSubClass.ipynb
 │   ├── JSONTest.ipynb
+│   ├── PoincareEnsemble.ipynb
 │   └── PoincareSections.ipynb
 ├── PendulumModels/
 │   ├── DoublePendulumHamiltonian.py
-│   ├── DoublePendulumLagrangian.py
-├── .gitattributes
-├── DoublePendulumSubclass.py
+│   └── DoublePendulumLagrangian.py
+├── AnalysisFunctions.py
 ├── DoublePendulumSubclassData.py
-├── DoublePendulumSubclassDev.py
 ├── DoublePendulumSubclassMomenta.py
+├── DoublePendulumSubclassRandomEnsemble.py
 ├── MathFunctions.py
 ├── README.md
 └── requirements.txt
 ```
 
-1. ### [`DoublePendulumSubclass.py`](pyscripts/DoublePendulumSubclass.py)
+----
 
-   The `DoublePendulumExplorer` subclass extends the functionality of the `DoublePendulum` class to explore a range of initial conditions for a double pendulum system. It focuses on how varying the initial angle $\theta_2$ affects the system's dynamics, and it provides tools for visualising Poincaré sections and other dynamic behaviors.
+## 1. The `DoublePendulumExplorer` subclass extends `DoublePendulum`
 
-   &nbsp;
-     - **Exploration of Initial Conditions**: Vary $\theta_2$ while keeping other initial conditions fixed to see how different initial angles affect the dynamics.
-     - **Poincaré Sections**: Calculate and visualize Poincaré sections to gain insights into the system's phase space structure and identify periodic or chaotic behavior.
-     - **Simulations and Data Structures**: Run multiple simulations and organise the results in a structured format for easy analysis and visualisation.
+### a. [`DoublePendulumSubclassMomenta.py`](DoublePendulumSubclassMomenta.py), tested in [`PoincareSections.ipynb`](Notebooks/PoincareSections.ipynb)
 
-   
-### 20/08/24: The Class was refactored to [`DoublePendulumSubclassMomenta.py`](DoublePendulumSubclassMomenta.py) focusing on energy conservation
+#### This subclass aims to plot Poincaré return maps with either $\theta_1$ or $\theta_2$ constrained to zero
 
-#### Refactoring Steps
+Variable declaration:
+```python
+import sympy as sp
 
-1. **Introduction of Potential Energy Calculations:**
-   - We added the ability to calculate the potential energy of the double pendulum system. This was crucial for performing energy-based analysis, such as finding Poincaré sections based on energy levels.
-   - The `_calculate_potential_energy` method was introduced, which accounts for both the 'simple' and 'compound' models, allowing the class to compute potential energy relative to a defined zero-potential reference point.
+l1, l2, m1, m2, M1, M2, g = sp.symbols('l1 l2 m1 m2 M1 M2 g', real=True, positive=True)
 
-2. **Energy-Based Poincaré Sections:**
-   - The `find_poincare_section` method was updated to focus on energy-based crossings, where the potential energy at a given crossing is compared to a specified maximum potential energy level. This method was refactored to interpolate values at the crossing points and only record them if the energy condition is met.
+# Declare functions
+theta1 = sp.Function('theta1')(t)
+theta2 = sp.Function('theta2')(t)
+p_theta_1 = sp.Function('p_theta_1')(t)
+p_theta_2 = sp.Function('p_theta_2')(t)
+
+# Set Unity Parameters for dimensionless pendulums
+params = {
+    g: 9.81,  # Acceleration due to gravity (m/s^2)
+    l1: 1.0,  # Length of the first rod (m)
+    l2: 1.0,  # Length of the second rod (m)
+    m1: 1.0,  # Mass of the first bob (kg)
+    m2: 1.0,  # Mass of the second bob (kg)
+    M1: 1.0,  # Mass of first uniform rod (kg)
+    M2: 1.0   # Mass of second uniform rod (kg)
+}
+
+# Time vector
+stop = 30  # max time in seconds
+fps = 800  # frames/second
+no_steps = stop * fps
+
+time = [0, stop, no_steps]
+```
+
+Instantiation:
+```python
+simple_explorer = DoublePendulumExplorer(params, time, model='simple', angle_range=(-np.pi, np.pi),
+                 fixed_angle='theta1', step_size_degrees=0.5)
+```
+
+- Default `angle_range` is $[-\pi, \pi]$
+- $V_{\text{max}} \implies \mathcal{H}$ is calculated from the largest absolute value  of `angle_range`
+- `fixed_angle` denotes which of $\theta_{1}$ or $\theta_{2}$ to constrain to zero 
+- If `step_size_degrees` is set to 1, there will be 360 simulations for `angle_range` $= [-\pi, \pi]$ 
 
 
-### The new class has been tested in [`PoincareSections.ipynb`](Notebooks/PoincareSections.ipynb) and the initial Poincaré plots look promising
+```python
+# Integrator Arguments
+integrator_args = {
+    'rtol': 1e-7,    # default is 1e-3
+    'atol': 1e-9     # default is 1e-6
+}
+
+# Finding the Poincaré Points
+simple_explorer.find_poincare_section(integrator=solve_ivp, fixed_angle=None, analyze=False, **integrator_args)
+
+# Plotting a Poincaré Map
+simple_explorer.plot_poincare_map(self, special_angles_deg=None, xrange=(-np.pi, np.pi), yrange=None)
+```
+If `analyze=True`, we collate computational cost data in .csv format (See [AnalysisFunctions.py](AnalysisFunctions.py))
+
+- Ironically, this analysis increases computational load by about 40% 🤦‍♂️
+- This will be extended to collate data on the numerical integration
+
+With looser `rtol` and `atol` defined in `integrator_args`, [`solve_ivp`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.integrate.solve_ivp.html#scipy.integrate.solve_ivp) introduces small errors at each step that accumulate over time, leading to points that are slightly off from their true positions. 
+
+- Tighter tolerances hopefully reduce this drift at the expense of computational load. We want an accurate representation of the system’s dynamics and we want it in a 'reasonable runtime`. These parameters are mutually exclusive
+
+#### Notebook experimentation has aimed to optimise the right combination of parameters. The images below have been produced with:
+
+- 30 second time interval, 800 frames per second $=$ 24,000 integration steps
+- 0.125 `step_size_degrees`
+- `rtol` $= 10^{-6}$
+- `atol` $= 10^{-8}$
+
+![img](Images/SimpleReturn.png)
+
+![img](Images/CompoundReturn.png)
+
+#### Batch Processing in `_run_simulations`
+
+Calling `find_poincare_section` calls a private method of the subclass. 
+
+- Batch Size: `run_simulations` allows you to specify the batch_size (currently hardcoded at 80), which determines how many simulations are run in parallel in each batch. 
+  - This allows the system to manage CPU and memory usage more effectively, preventing any single batch from consuming too many resources at once.
+- Parallel Processing: Within each batch, the simulations are run in parallel using the `joblib.Parallel` and `joblib.delayed` functions. This takes advantage of multiple CPU cores, speeding up the computation by distributing the workload.
+
+
+----
+
+### b. [`DoublePendulumSubclassRandomEnsemble.py`](DoublePendulumSubclassRandomEnsemble.py), tested in [`PoincareEnsemble.ipynb`](Notebooks/PoincareEnsemble.ipynb)
+
+#### This subclass aims to plot Poincaré return maps with random combinations of $\theta_1$ and $\theta_2$ and is based on a biased Monte Carlo ensemble method.
+
+Considers:
+
+- Introduction of mechanical energy to constrain the system:
+- Random sampling
+- Optimizing `_solve_ode` for early termination if a simulation diverges
+
+Quantitative analysis of the global system will inform the bias. Initially, it appears that selecting floats in radians completely at random introduces far too much noise.
 
 ---
 
-2. ### [`DevelopmentSubClass.ipynb`](Notebooks/DevelopmentSubClass.ipynb)
-   - Have started writing the base methods for the subclass.
+### c. `DoublePendulumSubclassLyapunov`, work in progress ...
+
+----
+
+## 2. [`DevelopmentSubClass.ipynb`](Notebooks/DevelopmentSubClass.ipynb)
+   - Have started writing the base methods to collate data.
    - The data dictionaries appear to be quite good!
-   - The Poincaré sections are really not what we are looking for...
 
 ----
 
-3. ### [`JSONTest.ipynb`](Notebooks/JSONTest.ipynb)
-   - Reading in the JSON data using Pandas (Will maybe swap for Polars once DB launched)
+## 3. [`JSONTest.ipynb`](Notebooks/JSONTest.ipynb)
+   - Reading in the JSON data using `Pandas` (Will maybe swap for `Polars` once DB launched)
 
 ----
 
-4. ### Using the Hamiltonian for Analysing Chaos and Periodic Orbits
-
-**Advantages of Hamiltonian Mechanics in Chaos and Periodic Orbits:**
-1. **Phase Space Analysis:**
-   - Hamiltonian mechanics naturally leads to the analysis of the system in phase space (coordinates and momenta), which is crucial for studying chaotic behaviour and periodic orbits.
-   - Trajectories in phase space can reveal fixed points, periodic orbits, and chaotic regions.
-
-2. **Energy Conservation:**
-   - In conservative systems, the Hamiltonian is a conserved quantity (total energy). This restriction of analysis to constant energy surfaces, simplifying the study of dynamics.
-
-3. **Symplectic Structure:**
-   - The Hamiltonian framework preserves the symplectic structure, which is important in the study of dynamical systems and chaos theory.
-
-#### Steps to Map Trajectories and Analyse Chaos
-
-1. **Derive the Hamiltonian:**
-   - Ensure that the Hamiltonian is correctly derived from the Lagrangian. In your case, you’ve already done this for the double pendulum.
-
-2. **Compute Hamilton's Equations:**
-   - Use Hamilton's equations to obtain the equations of motion:
-     $\dot{q}_i = \frac{\partial H}{\partial p_i}$, $\dot{p}_i = -\frac{\partial H}{\partial q_i}$ where $\mathbf{q}=(\theta_1, \theta_2)$
-   - These equations describe how the coordinates $q_i$ and momenta $p_i$ evolve over time.
-
-3. **Phase Space Trajectories:**
-   - Solve Hamilton’s equations numerically to obtain trajectories in phase space. Use Runge-Kutta integration.
-   - Visualise the trajectories to identify periodic orbits, fixed points, and chaotic behaviour.
-
-4. **Poincaré Sections:**
-   - Create Poincaré sections (intersections of phase space trajectories with a lower-dimensional subspace) to visualise the structure of the system. This will help in identifying periodic orbits and chaotic regions.
-
-5. **Lyapunov Exponents:**
-   - Calculate Lyapunov exponents to quantify the sensitivity of the system to initial conditions. Positive Lyapunov exponents indicate chaos.
-
-6. **Energy Conservation:**
-   - Ensure that energy is conserved in numerical simulations. Deviations may indicate numerical errors.
-
-7. **Bifurcation Diagrams:**
-   - Vary a system parameter (e.g., length or mass) and observe changes in the system's behaviour. Plot bifurcation diagrams to identify transitions between periodic and chaotic behaviour.
-
-8. **Periodic Orbits and Stability:**
-   - Identify periodic orbits and analyse their stability. Unstable periodic orbits can be indicative of chaotic regions.
 
 ### Further Reading and Tools:
 - **Books:**
